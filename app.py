@@ -26,16 +26,30 @@ DATASET_META = "temp_meta_data"
 # ──────────────────────────────────────────────
 @st.cache_resource
 def get_bq_client():
+    from google.oauth2 import service_account
+    import os
+
     # Streamlit Cloud: st.secrets にサービスアカウント情報がある場合
-    if "gcp_service_account" in st.secrets:
-        from google.oauth2 import service_account
-        creds = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
+    try:
+        if "gcp_service_account" in st.secrets:
+            creds = service_account.Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"],
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+            return bigquery.Client(project=PROJECT_ID, credentials=creds)
+    except Exception:
+        pass
+
+    # ローカル: サービスアカウントJSONファイル
+    sa_path = os.path.join(os.path.dirname(__file__), "service_account.json")
+    if os.path.exists(sa_path):
+        creds = service_account.Credentials.from_service_account_file(
+            sa_path,
             scopes=["https://www.googleapis.com/auth/cloud-platform"],
         )
         return bigquery.Client(project=PROJECT_ID, credentials=creds)
 
-    # ローカル: gcloud ADC
+    # フォールバック: gcloud ADC
     creds, project = google.auth.default()
     return bigquery.Client(project=PROJECT_ID, credentials=creds)
 
