@@ -12,6 +12,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from google.cloud import bigquery
 import google.auth
+import hashlib
 from datetime import datetime
 
 # ──────────────────────────────────────────────
@@ -20,6 +21,52 @@ from datetime import datetime
 PROJECT_ID = "braided-storm-479305-j8"
 DATASET_GA4 = "analytics_513983029"
 DATASET_META = "temp_meta_data"
+
+
+# ──────────────────────────────────────────────
+# ログイン認証
+# ──────────────────────────────────────────────
+def check_password() -> bool:
+    """パスワード認証ゲート。認証済みならTrue。"""
+    if st.session_state.get("authenticated"):
+        return True
+
+    # Secrets から認証情報を取得
+    # [passwords]
+    # admin = "ハッシュ値"
+    # client_xxx = "ハッシュ値"
+    try:
+        passwords = dict(st.secrets["passwords"])
+    except Exception:
+        st.error("認証設定が見つかりません。Secrets に [passwords] セクションを追加してください。")
+        st.stop()
+
+    st.markdown(
+        """
+        <div style="display: flex; justify-content: center; align-items: center; min-height: 60vh;">
+        <div style="width: 360px; text-align: center;">
+        """,
+        unsafe_allow_html=True,
+    )
+    st.image("https://img.icons8.com/fluency/96/lock.png", width=64)
+    st.markdown("### SOEL Analytics")
+    st.caption("ログインしてダッシュボードにアクセス")
+
+    with st.form("login_form"):
+        password = st.text_input("パスワード", type="password", placeholder="パスワードを入力")
+        submitted = st.form_submit_button("ログイン", use_container_width=True)
+
+    if submitted:
+        input_hash = hashlib.sha256(password.encode()).hexdigest()
+        for user, pw_hash in passwords.items():
+            if input_hash == pw_hash:
+                st.session_state["authenticated"] = True
+                st.session_state["user_role"] = user
+                st.rerun()
+        st.error("パスワードが正しくありません。")
+
+    st.markdown("</div></div>", unsafe_allow_html=True)
+    return False
 
 # ──────────────────────────────────────────────
 # 認証
@@ -118,6 +165,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ──────────────────────────────────────────────
+# 認証チェック（未ログインならログイン画面を表示して停止）
+# ──────────────────────────────────────────────
+if not check_password():
+    st.stop()
+
 st.markdown("""
 <style>
     [data-testid="stMetric"] {
@@ -143,6 +196,14 @@ with st.sidebar:
         ["🏠 概要", "🎬 クリエイティブ別", "📡 Meta広告", "🔀 ファネル", "🗂 生データ"],
         label_visibility="collapsed",
     )
+
+    st.divider()
+    user_role = st.session_state.get("user_role", "")
+    st.caption(f"ログイン中: {user_role}")
+    if st.button("ログアウト", use_container_width=True):
+        st.session_state["authenticated"] = False
+        st.session_state["user_role"] = ""
+        st.rerun()
 
 
 # ──────────────────────────────────────────────
